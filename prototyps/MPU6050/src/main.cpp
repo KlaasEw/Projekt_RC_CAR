@@ -147,6 +147,7 @@ void setup() {
 
   calibrateGyro();
   calibrateAltitude();
+  Serial.println("StartUp complet");
 }
 
 void loop() {
