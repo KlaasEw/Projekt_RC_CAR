@@ -39,14 +39,37 @@ Zubehör:         Logic-Level-Shifter
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <cstring>
+#include <cmath>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
 
+//Variablen MPU6050 & BME280
+static const int I2C_SDA_PIN = 21;
+static const int I2C_SCL_PIN = 22;
+static const float ALT_FILTER = 0.35f;
+
+Adafruit_MPU6050 mpu;
+Adafruit_BME280 bme;
+bool mpuReady = false;
+bool bmeReady = false;
+
+float gyroOffsetX = 0;
+float gyroOffsetY = 0;
+float gyroOffsetZ = 0;
+float pressureBaselinePa = 101325.0f;
+float altFiltered = 0;
+
+//Variablen ESP Now
 uint8_t receiverAddress[] = {0x1C, 0xC3, 0xAB, 0xBC, 0x17, 0x28};
 
 esp_now_peer_info_t peerInfo;
 bool espNowReady = false;
 
+//Variablen IBUS
 const int IBUS_RX_PIN = 34;
 const int MOTOR_PIN = 33;
 const int SERVO_PIN = 32;
@@ -72,6 +95,7 @@ uint16_t ibusChannels[14];
 bool ibusValid = false;
 unsigned long ibusLastMs = 0;
 
+//Variablen Telemetrie Struct
 const uint8_t TEL_MAGIC = 0xA5;
 const uint8_t TEL_VERSION = 1;
 
@@ -127,13 +151,22 @@ void initTelemetry();
 void fillRxFromIbus();
 void computeCmd();
 void applyCmd();
+bool readMpu(TelemetryV1 &data);
+float relativeAltitude(float pressurePa);
+void readBme(TelemetryV1 &data);
+void calibrateGyro();
+void calibrateAltitude();
+bool initBme();
 
 void setup() {
+  //Initialisierung der Seriellen Schnittstelle
   Serial.begin(115200);
   Serial.println("Start ESP_32");
 
+  //Initialisierung der Telemetrie
   initTelemetry();
 
+  //Initialisierung der Motoren und Servos
   motor.setPeriodHertz(50);
   steering.setPeriodHertz(50);
   motor.attach(MOTOR_PIN, PWM_MIN_US, PWM_MAX_US);
@@ -141,9 +174,11 @@ void setup() {
   motor.writeMicroseconds(PWM_NEUTRAL_US);
   steering.writeMicroseconds(PWM_NEUTRAL_US);
 
+  //Initialisierung der IBUS Schnittstelle
   Serial1.setRxBufferSize(1024);
   Serial1.begin(115200, SERIAL_8N1, IBUS_RX_PIN, -1);
 
+  //Initialisierung WiFi-Modul
   WiFi.mode(WIFI_STA);
   Serial.print("Eigene MAC: ");
   Serial.println(WiFi.macAddress());
@@ -162,14 +197,63 @@ void setup() {
     }
   }
 
+  //Initialisierung des I2C-Interface
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  Wire.setClock(400000);
+  delay(50);
+
+  //Initialisierung des MPU6050
+  if (!mpu.begin(MPU6050_I2CADDR_DEFAULT, &Wire)) {
+    Serial.println("Fehler: MPU6050 Init fehlgeschlagen");
+  } else {
+    mpuReady = true;
+    mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
+    mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
+    calibrateGyro();
+    Serial.println("MPU6050 bereit");
+  }
+
+  //Initialisierung des BME280
+  if (!initBme()) {
+    Serial.println("Fehler: BME280 Init fehlgeschlagen");
+  } else {
+    bmeReady = true;
+    calibrateAltitude();
+    Serial.println("BME280 bereit");
+  }
+
+  //Ende des Setup
+  Serial.println("StartUp complet");
+
 }
 
 void loop() {
-  parseIbus();
-  fillRxFromIbus();
-  computeCmd();
-  applyCmd();
+  //IBUS
+  parseIbus();      //IBUS Auslesen
+  fillRxFromIbus(); //Map IBUS zu Tel Struct
 
+  //Befehle zur Motor und Servo Ansteruerung berechnen und anwenden
+  computeCmd();     //Befehle aus Strukt Informationen berechnen
+  applyCmd();       //Berechnete Befehle auf Motor und Servo anwenden
+
+  //Auslesen MPU6050
+  if (mpuReady) {
+    readMpu(tel);
+  }
+
+  //Auslesen BME280
+  if (bmeReady) {
+    readBme(tel);
+  } else {
+    tel.alt_rel_m = 0;
+    tel.flags &= ~FLAG_BME;
+    if (!(tel.flags & FLAG_MPU)) {
+      tel.temp_c = 0;
+    }
+  }
+
+  //Serial Ausgabe
   Serial.print("rx_ok: ");
   Serial.print(tel.rx_ok);
   Serial.print(" rx_gas: ");
@@ -185,6 +269,7 @@ void loop() {
   Serial.print(" flags: ");
   Serial.println(tel.flags);
 
+  //ESP-NOW Senden
   if (espNowReady) {
     esp_err_t result = esp_now_send(receiverAddress, (uint8_t *)&tel, sizeof(tel));
     if (result != ESP_OK) {
@@ -305,4 +390,117 @@ void computeCmd() {
 void applyCmd() {
   writeMotor(tel.cmd_gas);
   writeSteering(tel.cmd_servo);
+}
+
+bool readMpu(TelemetryV1 &data) {
+  sensors_event_t accel;
+  sensors_event_t gyro;
+  sensors_event_t mpuTemp;
+  if (!mpu.getEvent(&accel, &gyro, &mpuTemp)) {
+    data.ax = 0;
+    data.ay = 0;
+    data.az = 0;
+    data.gx = 0;
+    data.gy = 0;
+    data.gz = 0;
+    data.flags &= ~FLAG_MPU;
+    return false;
+  }
+
+  data.ax = accel.acceleration.x / SENSORS_GRAVITY_STANDARD;
+  data.ay = accel.acceleration.y / SENSORS_GRAVITY_STANDARD;
+  data.az = accel.acceleration.z / SENSORS_GRAVITY_STANDARD;
+  data.gx = gyro.gyro.x * RAD_TO_DEG - gyroOffsetX;
+  data.gy = gyro.gyro.y * RAD_TO_DEG - gyroOffsetY;
+  data.gz = gyro.gyro.z * RAD_TO_DEG - gyroOffsetZ;
+  data.temp_c = mpuTemp.temperature;
+  data.flags |= FLAG_MPU;
+  return true;
+}
+
+float relativeAltitude(float pressurePa) {
+  if (pressureBaselinePa < 1.0f) {
+    return 0;
+  }
+  return 44330.0f * (1.0f - pow(pressurePa / pressureBaselinePa, 0.1903f));
+}
+
+void readBme(TelemetryV1 &data) {
+  float t = bme.readTemperature();
+  float pressurePa = bme.readPressure();
+
+  if (isnan(t) || pressurePa <= 10000.0f) {
+    data.alt_rel_m = 0;
+    data.flags &= ~FLAG_BME;
+    if (!(data.flags & FLAG_MPU)) {
+      data.temp_c = 0;
+    }
+    return;
+  }
+
+  data.temp_c = t;
+  float altRaw = relativeAltitude(pressurePa);
+  altFiltered += ALT_FILTER * (altRaw - altFiltered);
+  data.alt_rel_m = altFiltered;
+  data.flags |= FLAG_BME;
+}
+
+void calibrateGyro() {
+  const int samples = 200;
+  float sumX = 0;
+  float sumY = 0;
+  float sumZ = 0;
+  int ok = 0;
+
+  for (int i = 0; i < samples; i++) {
+    if (!readMpu(tel)) {
+      delay(10);
+      continue;
+    }
+    sumX += tel.gx;
+    sumY += tel.gy;
+    sumZ += tel.gz;
+    ok++;
+    delay(10);
+  }
+
+  if (ok == 0) {
+    return;
+  }
+
+  gyroOffsetX = sumX / ok;
+  gyroOffsetY = sumY / ok;
+  gyroOffsetZ = sumZ / ok;
+}
+
+void calibrateAltitude() {
+  const int samples = 40;
+  float sumP = 0;
+  int ok = 0;
+  for (int i = 0; i < samples; i++) {
+    float p = bme.readPressure();
+    if (p > 10000.0f) {
+      sumP += p;
+      ok++;
+    }
+    delay(25);
+  }
+  if (ok > 0) {
+    pressureBaselinePa = sumP / ok;
+  }
+  altFiltered = 0;
+}
+
+bool initBme() {
+  if (bme.begin(0x76, &Wire) || bme.begin(0x77, &Wire)) {
+    bme.setSampling(
+        Adafruit_BME280::MODE_NORMAL,
+        Adafruit_BME280::SAMPLING_X1,
+        Adafruit_BME280::SAMPLING_X16,
+        Adafruit_BME280::SAMPLING_NONE,
+        Adafruit_BME280::FILTER_X16,
+        Adafruit_BME280::STANDBY_MS_0_5);
+    return true;
+  }
+  return false;
 }
