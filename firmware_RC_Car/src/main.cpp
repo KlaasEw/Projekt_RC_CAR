@@ -297,7 +297,7 @@ void setup() {
     lidarReady = true;
     lastLidarScanMs = millis();
     lastLidarByteMs = millis();
-    xTaskCreatePinnedToCore(lidarTask, "lidar", 4096, NULL, 3, NULL, 1);
+    xTaskCreatePinnedToCore(lidarTask, "lidar", 4096, NULL, 3, NULL, 1); //Erstellt einen neuen Task für die Lidar-Verarbeitung, um die Hauptschleife nicht zu blockieren. Höhere Priorität als die Hauptschleife. Auch auf Kern 1 erstellen.
     Serial.println("RPLidar bereit");
   }
 
@@ -451,10 +451,49 @@ void computeCmd() {
   }
 
   tel.flags &= ~FLAG_FAILSAFE;
+  tel.flags &= ~FLAG_DANGER;
 
   int16_t gas = tel.rx_gas;
   if (tel.rx_control != 1) {
-    gas = (int16_t)(gas * 20 / 100);
+    if (!(tel.flags & FLAG_LIDAR)) { //Lidar Sensor fehlerhaft
+      if (gas > 15) {
+        gas = 15;
+      }
+      if (gas < -20) {
+        gas = -20;
+      }
+      tel.flags |= FLAG_DANGER;
+    } else if (tel.danger_used == 1) {  // Hinweis: 3000–5000 mm
+      if (gas > 40) {
+        gas = 40;
+      }
+      if (gas < -40) {
+        gas = -40;
+      }
+    } else if (tel.danger_used == 2) {  // Warnung: 1000–3000 mm
+      if (gas > 20) {
+        gas = 20;
+      }
+      if (gas < -20) {
+        gas = -20;
+      }
+      tel.flags |= FLAG_DANGER;
+    } else if (tel.danger_used == 3) {  // Stopp: < 1000 mm
+      if (gas > 10) {
+        gas = 10;
+      }
+      if (gas < -15) {
+        gas = -15;
+      }
+      tel.flags |= FLAG_DANGER;
+    } else {  // frei: > 4000 mm 
+      if (gas > 60) {
+        gas = 60;
+      }
+      if (gas < -60) {
+        gas = -60;
+      }
+    }
   }
 
   tel.cmd_gas = gas;
@@ -579,6 +618,7 @@ bool initBme() {
   return false;
 }
 
+//Lidar Task (FreeRTOS Task)
 void lidarTask(void *pv) {
   (void)pv;
   for (;;) {
@@ -694,10 +734,10 @@ uint8_t dangerFromMm(uint16_t mm) {
   if (mm < 1000) {
     return 3;
   }
-  if (mm < 2000) {
+  if (mm < 3000) {
     return 2;
   }
-  if (mm <= 4000) {
+  if (mm <= 5000) {
     return 1;
   }
   return 0;
@@ -744,9 +784,9 @@ void updateDangerUsed() {
 
   // rx_servo: links +, rechts −
   if (tel.rx_servo > STEER_DEADZONE) {
-    tel.danger_used = tel.danger[0];
-  } else if (tel.rx_servo < -STEER_DEADZONE) {
     tel.danger_used = tel.danger[2];
+  } else if (tel.rx_servo < -STEER_DEADZONE) {
+    tel.danger_used = tel.danger[0];
   } else {
     tel.danger_used = tel.danger[1];
   }
@@ -795,6 +835,7 @@ bool warteAufAntwort(unsigned long timeoutMs) {
   }
   return false;
 }
+
 void serialDebug() {
   char line[256];
   snprintf(
