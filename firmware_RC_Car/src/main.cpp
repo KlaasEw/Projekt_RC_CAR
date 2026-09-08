@@ -39,6 +39,13 @@ Zubehör:         Logic-Level-Shifter
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <cstring>
+#include <esp_now.h>
+#include <WiFi.h>
+
+uint8_t receiverAddress[] = {0x1C, 0xC3, 0xAB, 0xBC, 0x17, 0x28};
+
+esp_now_peer_info_t peerInfo;
+bool espNowReady = false;
 
 const int IBUS_RX_PIN = 34;
 const int MOTOR_PIN = 33;
@@ -108,6 +115,7 @@ static_assert(sizeof(TelemetryV1) == 63, "TelemetryV1 muss 63 Byte sein");
 
 TelemetryV1 tel;
 
+//Prototypen
 int mapGas(int pulseUs);
 int mapServo(int pulseUs);
 int mapControl(int pulseUs);
@@ -135,6 +143,25 @@ void setup() {
 
   Serial1.setRxBufferSize(1024);
   Serial1.begin(115200, SERIAL_8N1, IBUS_RX_PIN, -1);
+
+  WiFi.mode(WIFI_STA);
+  Serial.print("Eigene MAC: ");
+  Serial.println(WiFi.macAddress());
+
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Fehler: ESP-NOW Init fehlgeschlagen");
+  } else {
+    memcpy(peerInfo.peer_addr, receiverAddress, 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      Serial.println("Fehler: Peer konnte nicht hinzugefuegt werden");
+    } else {
+      espNowReady = true;
+      Serial.println("ESP-NOW bereit");
+    }
+  }
+
 }
 
 void loop() {
@@ -157,6 +184,13 @@ void loop() {
   Serial.print(tel.rx_control);
   Serial.print(" flags: ");
   Serial.println(tel.flags);
+
+  if (espNowReady) {
+    esp_err_t result = esp_now_send(receiverAddress, (uint8_t *)&tel, sizeof(tel));
+    if (result != ESP_OK) {
+      Serial.println("Fehler beim Senden");
+    }
+  }
 
   delay(20);
 }
