@@ -36,6 +36,9 @@ Zubehör:         Logic-Level-Shifter
 
 ======================================================================================================*/
 
+
+//Bibliotheken
+//======================================================================================================
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <cstring>
@@ -46,6 +49,35 @@ Zubehör:         Logic-Level-Shifter
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
+#include <cstdio>
+
+//Variablen
+//======================================================================================================
+
+//Variablen RPLidar C1
+const int LIDAR_RX_PIN = 16;
+const int LIDAR_TX_PIN = 17;
+
+float minDistLeft = 99999.0;
+float minDistCenter = 99999.0;
+float minDistRight = 99999.0;
+
+const float MIN_VALID_DISTANCE = 100.0;  // mm, 0 = kein Echo
+const int16_t STEER_DEADZONE = 15;       // Grad, darunter gilt Geradeaus
+
+byte paket[5];
+int paketIndex = 0;
+bool lidarReady = false;
+unsigned long lastLidarScanMs = 0;
+unsigned long lastLidarByteMs = 0;
+unsigned long lastTelMs = 0;
+
+struct LidarShare {
+  uint16_t mm[3];
+  uint8_t danger[3];
+  uint8_t valid;
+};
+volatile LidarShare lidarShare = {};
 
 //Variablen MPU6050 & BME280
 static const int I2C_SDA_PIN = 21;
@@ -140,6 +172,8 @@ static_assert(sizeof(TelemetryV1) == 63, "TelemetryV1 muss 63 Byte sein");
 TelemetryV1 tel;
 
 //Prototypen
+//======================================================================================================
+
 int mapGas(int pulseUs);
 int mapServo(int pulseUs);
 int mapControl(int pulseUs);
@@ -157,6 +191,23 @@ void readBme(TelemetryV1 &data);
 void calibrateGyro();
 void calibrateAltitude();
 bool initBme();
+void processLidarPoint(float angle, float distance, bool isNewScan);
+void parseLidar();
+void lidarTask(void *pv);
+void applyLidarToTel();
+void lidarBefehl(byte cmd);
+void lidarBefehlWert(byte cmd, uint16_t wert);
+bool warteAufAntwort(unsigned long timeoutMs);
+uint16_t sectorToMm(float minDist);
+uint8_t dangerFromMm(uint16_t mm);
+void publishLidarScan();
+void finishLidarScan();
+void clearLidarTelemetry();
+void updateDangerUsed();
+void serialDebug();
+
+//Setup
+//======================================================================================================
 
 void setup() {
   //Initialisierung der Seriellen Schnittstelle
@@ -223,19 +274,54 @@ void setup() {
     Serial.println("BME280 bereit");
   }
 
+  //Initialisierung des RPLidar C1
+  Serial2.setRxBufferSize(8192);
+  Serial2.begin(460800, SERIAL_8N1, LIDAR_RX_PIN, LIDAR_TX_PIN);
+  delay(50);
+
+  lidarBefehl(0x25);  // STOP
+  delay(50);
+  lidarBefehl(0x40);  // RESET
+  delay(2000);
+  while (Serial2.available()) Serial2.read();
+
+  lidarBefehlWert(0xA8, 600);  // Motor RPM
+  lidarBefehlWert(0xF0, 660);  // Motor PWM
+  delay(1200);
+  while (Serial2.available()) Serial2.read();
+
+  lidarBefehl(0x20);  // SCAN starten
+  if (!warteAufAntwort(4000)) {
+    Serial.println("Fehler: RPLidar Init fehlgeschlagen");
+  } else {
+    lidarReady = true;
+    lastLidarScanMs = millis();
+    lastLidarByteMs = millis();
+    xTaskCreatePinnedToCore(lidarTask, "lidar", 4096, NULL, 3, NULL, 1);
+    Serial.println("RPLidar bereit");
+  }
+
   //Ende des Setup
   Serial.println("StartUp complet");
 
 }
 
-void loop() {
-  //IBUS
-  parseIbus();      //IBUS Auslesen
-  fillRxFromIbus(); //Map IBUS zu Tel Struct
+//Loop
+//======================================================================================================
 
-  //Befehle zur Motor und Servo Ansteruerung berechnen und anwenden
-  computeCmd();     //Befehle aus Strukt Informationen berechnen
-  applyCmd();       //Berechnete Befehle auf Motor und Servo anwenden
+void loop() {
+  parseIbus();
+
+  if (millis() - lastTelMs < 20) {
+    return;
+  }
+  lastTelMs = millis();
+
+  fillRxFromIbus();
+  applyLidarToTel();
+
+  computeCmd();
+  applyCmd();
 
   //Auslesen MPU6050
   if (mpuReady) {
@@ -253,21 +339,8 @@ void loop() {
     }
   }
 
-  //Serial Ausgabe
-  Serial.print("rx_ok: ");
-  Serial.print(tel.rx_ok);
-  Serial.print(" rx_gas: ");
-  Serial.print(tel.rx_gas);
-  Serial.print(" cmd_gas: ");
-  Serial.print(tel.cmd_gas);
-  Serial.print(" rx_servo: ");
-  Serial.print(tel.rx_servo);
-  Serial.print(" cmd_servo: ");
-  Serial.print(tel.cmd_servo);
-  Serial.print(" rx_control: ");
-  Serial.print(tel.rx_control);
-  Serial.print(" flags: ");
-  Serial.println(tel.flags);
+  //Serial Ausgabe für Debugging
+  serialDebug();
 
   //ESP-NOW Senden
   if (espNowReady) {
@@ -276,9 +349,10 @@ void loop() {
       Serial.println("Fehler beim Senden");
     }
   }
-
-  delay(20);
 }
+
+//Funktionen
+//======================================================================================================
 
 int mapGas(int pulseUs) {
   return map(pulseUs, 999, 2000, -100, 100);
@@ -503,4 +577,249 @@ bool initBme() {
     return true;
   }
   return false;
+}
+
+void lidarTask(void *pv) {
+  (void)pv;
+  for (;;) {
+    parseLidar();
+    vTaskDelay(1);
+  }
+}
+
+void applyLidarToTel() {
+  tel.lidar_mm[0] = lidarShare.mm[0];
+  tel.lidar_mm[1] = lidarShare.mm[1];
+  tel.lidar_mm[2] = lidarShare.mm[2];
+  tel.danger[0] = lidarShare.danger[0];
+  tel.danger[1] = lidarShare.danger[1];
+  tel.danger[2] = lidarShare.danger[2];
+  if (lidarShare.valid) {
+    tel.flags |= FLAG_LIDAR;
+  } else {
+    tel.flags &= ~FLAG_LIDAR;
+  }
+  updateDangerUsed();
+}
+
+void parseLidar() {
+  if (!lidarReady) {
+    clearLidarTelemetry();
+    return;
+  }
+
+  int processed = 0;
+  while (Serial2.available()) {
+    lastLidarByteMs = millis();
+    paket[paketIndex] = Serial2.read();
+    paketIndex++;
+
+    if (paketIndex < 5) continue;
+
+    int startBit = paket[0] & 0x01;
+    int startBitInv = (paket[0] >> 1) & 0x01;
+    int checkBit = paket[1] & 0x01;
+
+    if (startBit == startBitInv || checkBit != 1) {
+      for (int i = 0; i < 4; i++) paket[i] = paket[i + 1];
+      paketIndex = 4;
+      if (++processed >= 256) {
+        break;
+      }
+      continue;
+    }
+
+    float winkel = ((paket[1] >> 1) | (paket[2] << 7)) / 64.0;
+    if (winkel >= 360.0) winkel = winkel - 360.0;
+    float distanz = (paket[3] | (paket[4] << 8)) / 4.0;
+
+    paketIndex = 0;
+    processLidarPoint(winkel, distanz, startBit == 1);
+    if (++processed >= 256) {
+      break;
+    }
+  }
+
+  unsigned long now = millis();
+  if (lastLidarByteMs != 0 && (now - lastLidarByteMs) > 300) {
+    while (Serial2.available()) {
+      Serial2.read();
+    }
+    paketIndex = 0;
+    minDistLeft = 99999.0;
+    minDistCenter = 99999.0;
+    minDistRight = 99999.0;
+    clearLidarTelemetry();
+    return;
+  }
+
+  if (lastLidarScanMs != 0 && (now - lastLidarScanMs) >= 180) {
+    finishLidarScan();
+  }
+}
+
+void processLidarPoint(float angle, float distance, bool isNewScan) {
+  if (isNewScan) {
+    unsigned long now = millis();
+    if (now - lastLidarScanMs >= 80) {
+      finishLidarScan();
+    }
+  }
+
+  if (distance < MIN_VALID_DISTANCE) return;
+  if (distance > 12000.0) return;
+
+  // 0° = vorne (Kabel/Markierung). Je Zone 30°.
+  // Links: 315-345°   Mitte: 345-15°   Rechts: 15-45°
+  if (angle >= 315.0 && angle < 345.0) {
+    if (distance < minDistLeft) minDistLeft = distance;
+  } else if (angle >= 345.0 || angle < 15.0) {
+    if (distance < minDistCenter) minDistCenter = distance;
+  } else if (angle >= 15.0 && angle < 45.0) {
+    if (distance < minDistRight) minDistRight = distance;
+  }
+}
+
+uint16_t sectorToMm(float minDist) {
+  if (minDist >= 99999.0f) {
+    return 0;
+  }
+  return (uint16_t)minDist;
+}
+
+uint8_t dangerFromMm(uint16_t mm) {
+  if (mm == 0) {
+    return 0;
+  }
+  if (mm < 1000) {
+    return 3;
+  }
+  if (mm < 2000) {
+    return 2;
+  }
+  if (mm <= 4000) {
+    return 1;
+  }
+  return 0;
+}
+
+void publishLidarScan() {
+  lidarShare.mm[0] = sectorToMm(minDistLeft);
+  lidarShare.mm[1] = sectorToMm(minDistCenter);
+  lidarShare.mm[2] = sectorToMm(minDistRight);
+  lidarShare.danger[0] = dangerFromMm(lidarShare.mm[0]);
+  lidarShare.danger[1] = dangerFromMm(lidarShare.mm[1]);
+  lidarShare.danger[2] = dangerFromMm(lidarShare.mm[2]);
+  lidarShare.valid = 1;
+}
+
+void finishLidarScan() {
+  bool scanHatDaten = (minDistLeft < 99999.0f) ||
+                     (minDistCenter < 99999.0f) ||
+                     (minDistRight < 99999.0f);
+  if (scanHatDaten) {
+    publishLidarScan();
+  }
+  minDistLeft = 99999.0;
+  minDistCenter = 99999.0;
+  minDistRight = 99999.0;
+  lastLidarScanMs = millis();
+}
+
+void clearLidarTelemetry() {
+  lidarShare.mm[0] = 0;
+  lidarShare.mm[1] = 0;
+  lidarShare.mm[2] = 0;
+  lidarShare.danger[0] = 0;
+  lidarShare.danger[1] = 0;
+  lidarShare.danger[2] = 0;
+  lidarShare.valid = 0;
+}
+
+void updateDangerUsed() {
+  if (!(tel.flags & FLAG_LIDAR)) {
+    tel.danger_used = 0;
+    return;
+  }
+
+  // rx_servo: links +, rechts −
+  if (tel.rx_servo > STEER_DEADZONE) {
+    tel.danger_used = tel.danger[0];
+  } else if (tel.rx_servo < -STEER_DEADZONE) {
+    tel.danger_used = tel.danger[2];
+  } else {
+    tel.danger_used = tel.danger[1];
+  }
+}
+
+void lidarBefehl(byte cmd) {
+  Serial2.write(0xA5);
+  Serial2.write(cmd);
+  Serial2.flush();
+}
+
+void lidarBefehlWert(byte cmd, uint16_t wert) {
+  byte frame[6];
+  frame[0] = 0xA5;
+  frame[1] = cmd;
+  frame[2] = 2;
+  frame[3] = wert & 0xFF;
+  frame[4] = (wert >> 8) & 0xFF;
+  frame[5] = frame[0] ^ frame[1] ^ frame[2] ^ frame[3] ^ frame[4];
+  Serial2.write(frame, 6);
+  Serial2.flush();
+}
+
+bool warteAufAntwort(unsigned long timeoutMs) {
+  unsigned long start = millis();
+  int vorher = 0;
+
+  while (millis() - start < timeoutMs) {
+    if (!Serial2.available()) {
+      delay(1);
+      continue;
+    }
+
+    int b = Serial2.read();
+    if (vorher == 0xA5 && b == 0x5A) {
+      for (int i = 0; i < 5; i++) {
+        unsigned long waitStart = millis();
+        while (!Serial2.available()) {
+          if (millis() - waitStart > timeoutMs) return false;
+        }
+        Serial2.read();
+      }
+      return true;
+    }
+    vorher = b;
+  }
+  return false;
+}
+void serialDebug() {
+  char line[256];
+  snprintf(
+      line, sizeof(line),
+      "TEL,%u,%u,%lu,%d,%d,%u,%u,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+      (unsigned)tel.version,
+      (unsigned)tel.seq,
+      (unsigned long)tel.t_ms,
+      (int)tel.rx_gas,
+      (int)tel.rx_servo,
+      (unsigned)tel.rx_control,
+      (unsigned)tel.rx_ok,
+      (int)tel.cmd_gas,
+      (int)tel.cmd_servo,
+      tel.ax, tel.ay, tel.az,
+      tel.gx, tel.gy, tel.gz,
+      tel.temp_c, tel.alt_rel_m,
+      (unsigned)tel.vbat_mv,
+      (unsigned)tel.lidar_mm[0],
+      (unsigned)tel.lidar_mm[1],
+      (unsigned)tel.lidar_mm[2],
+      (unsigned)tel.danger[0],
+      (unsigned)tel.danger[1],
+      (unsigned)tel.danger[2],
+      (unsigned)tel.danger_used,
+      (unsigned)tel.flags);
+  Serial.print(line);
 }

@@ -2,6 +2,7 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <cstring>
+#include <cstdio>
 
 const uint8_t TEL_MAGIC = 0xA5;
 const uint8_t TEL_VERSION = 1;
@@ -38,6 +39,9 @@ typedef struct __attribute__((packed)) {
 static_assert(sizeof(TelemetryV1) == 63, "TelemetryV1 muss 63 Byte sein");
 
 TelemetryV1 tel;
+TelemetryV1 telQueued;
+volatile bool telPending = false;
+portMUX_TYPE telMux = portMUX_INITIALIZER_UNLOCKED;
 
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len);
 void printTelCsv();
@@ -62,6 +66,16 @@ void setup() {
 }
 
 void loop() {
+  if (!telPending) {
+    return;
+  }
+
+  portENTER_CRITICAL(&telMux);
+  tel = telQueued;
+  telPending = false;
+  portEXIT_CRITICAL(&telMux);
+
+  printTelCsv();
 }
 
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
@@ -69,66 +83,43 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     return;
   }
 
-  memcpy(&tel, incomingData, sizeof(tel));
-
-  if (tel.magic != TEL_MAGIC || tel.version != TEL_VERSION) {
+  TelemetryV1 incoming;
+  memcpy(&incoming, incomingData, sizeof(incoming));
+  if (incoming.magic != TEL_MAGIC || incoming.version != TEL_VERSION) {
     return;
   }
 
-  printTelCsv();
+  portENTER_CRITICAL(&telMux);
+  telQueued = incoming;
+  telPending = true;
+  portEXIT_CRITICAL(&telMux);
 }
 
 void printTelCsv() {
-  Serial.print("TEL,");
-  Serial.print(tel.version);
-  Serial.print(',');
-  Serial.print(tel.seq);
-  Serial.print(',');
-  Serial.print(tel.t_ms);
-  Serial.print(',');
-  Serial.print(tel.rx_gas);
-  Serial.print(',');
-  Serial.print(tel.rx_servo);
-  Serial.print(',');
-  Serial.print(tel.rx_control);
-  Serial.print(',');
-  Serial.print(tel.rx_ok);
-  Serial.print(',');
-  Serial.print(tel.cmd_gas);
-  Serial.print(',');
-  Serial.print(tel.cmd_servo);
-  Serial.print(',');
-  Serial.print(tel.ax, 3);
-  Serial.print(',');
-  Serial.print(tel.ay, 3);
-  Serial.print(',');
-  Serial.print(tel.az, 3);
-  Serial.print(',');
-  Serial.print(tel.gx, 3);
-  Serial.print(',');
-  Serial.print(tel.gy, 3);
-  Serial.print(',');
-  Serial.print(tel.gz, 3);
-  Serial.print(',');
-  Serial.print(tel.temp_c, 3);
-  Serial.print(',');
-  Serial.print(tel.alt_rel_m, 3);
-  Serial.print(',');
-  Serial.print(tel.vbat_mv);
-  Serial.print(',');
-  Serial.print(tel.lidar_mm[0]);
-  Serial.print(',');
-  Serial.print(tel.lidar_mm[1]);
-  Serial.print(',');
-  Serial.print(tel.lidar_mm[2]);
-  Serial.print(',');
-  Serial.print(tel.danger[0]);
-  Serial.print(',');
-  Serial.print(tel.danger[1]);
-  Serial.print(',');
-  Serial.print(tel.danger[2]);
-  Serial.print(',');
-  Serial.print(tel.danger_used);
-  Serial.print(',');
-  Serial.println(tel.flags);
+  char line[256];
+  snprintf(
+      line, sizeof(line),
+      "TEL,%u,%u,%lu,%d,%d,%u,%u,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+      (unsigned)tel.version,
+      (unsigned)tel.seq,
+      (unsigned long)tel.t_ms,
+      (int)tel.rx_gas,
+      (int)tel.rx_servo,
+      (unsigned)tel.rx_control,
+      (unsigned)tel.rx_ok,
+      (int)tel.cmd_gas,
+      (int)tel.cmd_servo,
+      tel.ax, tel.ay, tel.az,
+      tel.gx, tel.gy, tel.gz,
+      tel.temp_c, tel.alt_rel_m,
+      (unsigned)tel.vbat_mv,
+      (unsigned)tel.lidar_mm[0],
+      (unsigned)tel.lidar_mm[1],
+      (unsigned)tel.lidar_mm[2],
+      (unsigned)tel.danger[0],
+      (unsigned)tel.danger[1],
+      (unsigned)tel.danger[2],
+      (unsigned)tel.danger_used,
+      (unsigned)tel.flags);
+  Serial.print(line);
 }
