@@ -70,6 +70,8 @@ int paketIndex = 0;
 bool lidarReady = false;
 unsigned long lastLidarScanMs = 0;
 unsigned long lastLidarByteMs = 0;
+unsigned long lastLidarRestartMs = 0;
+uint8_t lidarFailCount = 0;
 unsigned long lastTelMs = 0;
 
 struct LidarShare {
@@ -198,6 +200,9 @@ void applyLidarToTel();
 void lidarBefehl(byte cmd);
 void lidarBefehlWert(byte cmd, uint16_t wert);
 bool warteAufAntwort(unsigned long timeoutMs);
+void lidarFullReset();
+bool lidarStartScan(unsigned long timeoutMs);
+void recoverLidar();
 uint16_t sectorToMm(float minDist);
 uint8_t dangerFromMm(uint16_t mm);
 void publishLidarScan();
@@ -279,27 +284,16 @@ void setup() {
   Serial2.begin(460800, SERIAL_8N1, LIDAR_RX_PIN, LIDAR_TX_PIN);
   delay(50);
 
-  lidarBefehl(0x25);  // STOP
-  delay(50);
-  lidarBefehl(0x40);  // RESET
-  delay(2000);
-  while (Serial2.available()) Serial2.read();
-
-  lidarBefehlWert(0xA8, 600);  // Motor RPM
-  lidarBefehlWert(0xF0, 660);  // Motor PWM
-  delay(1200);
-  while (Serial2.available()) Serial2.read();
-
-  lidarBefehl(0x20);  // SCAN starten
-  if (!warteAufAntwort(4000)) {
-    Serial.println("Fehler: RPLidar Init fehlgeschlagen");
-  } else {
+  lidarFullReset();
+  if (lidarStartScan(4000)) {
     lidarReady = true;
     lastLidarScanMs = millis();
     lastLidarByteMs = millis();
-    xTaskCreatePinnedToCore(lidarTask, "lidar", 4096, NULL, 3, NULL, 1); //Erstellt einen neuen Task für die Lidar-Verarbeitung, um die Hauptschleife nicht zu blockieren. Höhere Priorität als die Hauptschleife. Auch auf Kern 1 erstellen.
     Serial.println("RPLidar bereit");
+  } else {
+    Serial.println("Fehler: RPLidar Init fehlgeschlagen");
   }
+  xTaskCreatePinnedToCore(lidarTask, "lidar", 4096, NULL, 3, NULL, 1);
 
   //Ende des Setup
   Serial.println("StartUp complet");
@@ -645,6 +639,7 @@ void applyLidarToTel() {
 void parseLidar() {
   if (!lidarReady) {
     clearLidarTelemetry();
+    recoverLidar();
     return;
   }
 
@@ -690,6 +685,7 @@ void parseLidar() {
     minDistCenter = 99999.0;
     minDistRight = 99999.0;
     clearLidarTelemetry();
+    recoverLidar();
     return;
   }
 
@@ -789,6 +785,60 @@ void updateDangerUsed() {
     tel.danger_used = tel.danger[0];
   } else {
     tel.danger_used = tel.danger[1];
+  }
+}
+
+void lidarFullReset() {
+  lidarBefehl(0x25);
+  delay(50);
+  lidarBefehl(0x40);
+  delay(2000);
+  while (Serial2.available()) {
+    Serial2.read();
+  }
+  lidarBefehlWert(0xA8, 600);
+  lidarBefehlWert(0xF0, 660);
+  delay(1200);
+  while (Serial2.available()) {
+    Serial2.read();
+  }
+}
+
+bool lidarStartScan(unsigned long timeoutMs) {
+  while (Serial2.available()) {
+    Serial2.read();
+  }
+  paketIndex = 0;
+  lidarBefehl(0x20);
+  return warteAufAntwort(timeoutMs);
+}
+
+void recoverLidar() {
+  unsigned long now = millis();
+  if (lastLidarRestartMs != 0 && (now - lastLidarRestartMs) < 2500) {
+    return;
+  }
+  lastLidarRestartMs = now;
+  lidarFailCount++;
+
+  if (lidarFailCount >= 3) {
+    lidarFullReset();
+    lidarFailCount = 0;
+  } else {
+    lidarBefehl(0x25);
+    delay(50);
+    while (Serial2.available()) {
+      Serial2.read();
+    }
+  }
+
+  if (lidarStartScan(1500)) {
+    lidarReady = true;
+    lastLidarByteMs = millis();
+    lastLidarScanMs = millis();
+    lidarFailCount = 0;
+  } else {
+    lidarReady = false;
   }
 }
 
