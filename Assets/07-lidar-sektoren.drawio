@@ -1,0 +1,136 @@
+<mxfile host="app.diagrams.net" agent="Projekt_RC_CAR">
+  <diagram id="abb7" name="Abbildung 7 Lidar-Sektoren">
+    <mxGraphModel dx="1928" dy="1206" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="bg" parent="1" style="rounded=1;fillColor=#F5F7FA;strokeColor=none;" value="" vertex="1">
+          <mxGeometry height="900" width="1600" as="geometry" />
+        </mxCell>
+        <mxCell id="card-l" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fillColor=#ffffff;strokeColor=#d0d7de;fontColor=#57606A;fontStyle=1;fontSize=14;spacingTop=10;" value="Draufsicht · 0° = Fahrzeugfront" vertex="1">
+          <mxGeometry height="780" width="900" x="20" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="card-r" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fillColor=#ffffff;strokeColor=#d0d7de;fontColor=#57606A;fontStyle=1;fontSize=14;spacingTop=10;" value="Wirksamer Sektor nach Lenkung" vertex="1">
+          <mxGeometry height="780" width="620" x="940" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="p-l" parent="1" style="shape=mxgraph.basic.pie;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;startAngle=0.875;endAngle=0.95833;" value="" vertex="1">
+          <mxGeometry height="520" width="520" x="210" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p-c1" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ffe6cc;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.95833;endAngle=1;" value="" vertex="1">
+          <mxGeometry height="520" width="520" x="210" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p-r" parent="1" style="shape=mxgraph.basic.pie;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;startAngle=0.04167;endAngle=0.125;" value="" vertex="1">
+          <mxGeometry height="520" width="520" x="210" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="lab0" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="315°" vertex="1">
+          <mxGeometry height="40" width="80" x="230" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lab1" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="345°" vertex="1">
+          <mxGeometry height="40" width="80" x="360" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lab3" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="15°" vertex="1">
+          <mxGeometry height="40" width="80" x="500" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lab4" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="45°" vertex="1">
+          <mxGeometry height="40" width="80" x="630" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lab5" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="Links&lt;br&gt;315–345°" vertex="1">
+          <mxGeometry height="40" width="80" x="340" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="lab7" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="Rechts&lt;br&gt;15–45°" vertex="1">
+          <mxGeometry height="40" width="80" x="520" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="lidar-dot" parent="1" style="ellipse;fillColor=#2E7D32;strokeColor=#1B5E20;" value="" vertex="1">
+          <mxGeometry height="12" width="12" x="464" y="372" as="geometry" />
+        </mxCell>
+        <mxCell id="note-main" parent="1" style="text;html=1;align=center;fontSize=12;fontColor=#57606A;" value="Beispiel: Mitte Warnung, links Hinweis, rechts frei.&lt;br&gt;Cyan = derzeit wirksamer Sektor (Geradeaus, Totzone ±15°)." vertex="1">
+          <mxGeometry height="40" width="780" x="80" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-l" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.875;endAngle=0.95833;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-c1" parent="1" style="shape=mxgraph.basic.pie;fillColor=#fff2cc;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.95833;endAngle=1;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-r" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.04167;endAngle=0.125;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-c2" parent="1" style="shape=mxgraph.basic.pie;fillColor=#fff2cc;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.0;endAngle=0.04167;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-car" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#37474F;strokeColor=#263238;fontColor=#90CAF9;fontSize=11;fontStyle=1;arcSize=20;" value="Auto" vertex="1">
+          <mxGeometry height="70" width="44" x="1318" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="s0-t" parent="1" style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#1F2328;fontStyle=1;" value="Geradeaus&lt;br&gt;Totzone |Lenkung| ≤ 15°&lt;br&gt;&lt;font color=&#39;#00ACC1&#39;&gt;greift: Mitte 345°–15°&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="260" x="960" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-c1" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.95833;endAngle=1;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-l" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ffe6cc;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.875;endAngle=0.95833;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-c2" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.0;endAngle=0.04167;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-r" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.04167;endAngle=0.125;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-car" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#37474F;strokeColor=#263238;fontColor=#90CAF9;fontSize=11;fontStyle=1;arcSize=20;" value="Auto" vertex="1">
+          <mxGeometry height="70" width="44" x="1318" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="s1-t" parent="1" style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#1F2328;fontStyle=1;" value="Linkslenkung&lt;br&gt;Lenkung &gt; +15°&lt;br&gt;&lt;font color=&#39;#00ACC1&#39;&gt;greift: Links 315°–345°&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="260" x="960" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-l" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.875;endAngle=0.95833;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-c1" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.95833;endAngle=1;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-c2" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ECEFF1;strokeColor=#B0BEC5;strokeWidth=1;startAngle=0.0;endAngle=0.04167;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-r" parent="1" style="shape=mxgraph.basic.pie;fillColor=#d5e8d4;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.04167;endAngle=0.125;" value="" vertex="1">
+          <mxGeometry height="200" width="200" x="1240" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-car" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#37474F;strokeColor=#263238;fontColor=#90CAF9;fontSize=11;fontStyle=1;arcSize=20;" value="Auto" vertex="1">
+          <mxGeometry height="70" width="44" x="1318" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="s2-t" parent="1" style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#1F2328;fontStyle=1;" value="Rechtslenkung&lt;br&gt;Lenkung &lt; −15°&lt;br&gt;&lt;font color=&#39;#00ACC1&#39;&gt;greift: Rechts 15°–45°&lt;/font&gt;" vertex="1">
+          <mxGeometry height="80" width="260" x="960" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="leg" parent="1" style="text;html=1;align=left;fontSize=13;fontColor=#1F2328;" value="&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; 0 frei &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;1 Hinweis &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;2 Warnung &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; 3 Stopp &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;wirksamer Sektor" vertex="1">
+          <mxGeometry height="30" width="1100" x="70" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="Lo8PVJmsGZVwXJBcjXBI-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="70" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="Lo8PVJmsGZVwXJBcjXBI-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="150" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="Lo8PVJmsGZVwXJBcjXBI-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="250" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="Lo8PVJmsGZVwXJBcjXBI-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="360" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="Lo8PVJmsGZVwXJBcjXBI-5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#66FFFF;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="455" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="p-c2" parent="1" style="shape=mxgraph.basic.pie;fillColor=#ffe6cc;strokeColor=#66FFFF;strokeWidth=3;startAngle=0.0;endAngle=0.04167;" value="" vertex="1">
+          <mxGeometry height="520" width="520" x="210" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="car-main" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#37474F;strokeColor=#263238;fontColor=#90CAF9;fontSize=11;fontStyle=1;arcSize=20;" value="Auto" vertex="1">
+          <mxGeometry height="96" width="56" x="442" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="lab2" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="0° vorn" vertex="1">
+          <mxGeometry height="40" width="80" x="430" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lab6" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#57606A;" value="Mitte&lt;br&gt;345–15°" vertex="1">
+          <mxGeometry height="40" width="80" x="430" y="200" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
