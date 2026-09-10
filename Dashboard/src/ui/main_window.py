@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QStatusBar,
     QVBoxLayout,
     QWidget,
@@ -70,20 +71,36 @@ class MainWindow(QMainWindow):
         self.telemetry = TelemetryPanel()
         self.flags.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self.telemetry.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._expanded_panel: Optional[ViewPanel] = None
+        self._placeholder: Optional[QWidget] = None
+        self._home_splitter: Optional[QSplitter] = None
 
         root = QWidget()
         self.setCentralWidget(root)
-        layout = QVBoxLayout(root)
+        root_layout = QVBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        self._stack = QStackedWidget()
+        root_layout.addWidget(self._stack)
+
+        dash = QWidget()
+        layout = QVBoxLayout(dash)
         layout.setContentsMargins(14, 14, 14, 8)
         layout.setSpacing(10)
 
         layout.addWidget(self._build_header())
         layout.addWidget(self._build_toolbar())
 
+        self.top_panel = ViewPanel(self.top_down, extra=self.sector_legend, title="Draufsicht · Lidar")
+        self.motion_panel = ViewPanel(self.motion, title="Lage im Raum")
+        self.top_panel.expand_requested.connect(lambda: self._expand_panel(self.top_panel))
+        self.motion_panel.expand_requested.connect(lambda: self._expand_panel(self.motion_panel))
+
         views = QSplitter(Qt.Orientation.Horizontal)
         views.setChildrenCollapsible(False)
-        views.addWidget(ViewPanel(self.top_down, extra=self.sector_legend))
-        views.addWidget(ViewPanel(self.motion))
+        views.addWidget(self.top_panel)
+        views.addWidget(self.motion_panel)
         views.setStretchFactor(0, 1)
         views.setStretchFactor(1, 1)
 
@@ -102,6 +119,8 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([560, 260])
         layout.addWidget(splitter, 1)
+        self._stack.addWidget(dash)
+        self._stack.addWidget(self._build_expand_page())
 
         status = QStatusBar()
         self.setStatusBar(status)
@@ -116,6 +135,67 @@ class MainWindow(QMainWindow):
         self._stale_timer.timeout.connect(self._check_stale)
         self._stale_timer.start()
         self._last_packet_at = 0.0
+
+    def _build_expand_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(14, 14, 14, 8)
+        layout.setSpacing(10)
+
+        bar = QHBoxLayout()
+        self._expand_heading = QLabel()
+        self._expand_heading.setObjectName("titleLabel")
+        back = QPushButton("Zurück zur Übersicht")
+        back.setObjectName("primaryButton")
+        back.clicked.connect(self._collapse_panel)
+        bar.addWidget(self._expand_heading)
+        bar.addStretch(1)
+        bar.addWidget(back)
+        layout.addLayout(bar)
+
+        self._expand_slot = QVBoxLayout()
+        self._expand_slot.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._expand_slot, 1)
+        return page
+
+    def _expand_panel(self, panel: ViewPanel):
+        if self._expanded_panel is not None:
+            return
+        parent = panel.parentWidget()
+        if not isinstance(parent, QSplitter):
+            return
+        self._home_splitter = parent
+        idx = parent.indexOf(panel)
+        self._placeholder = QFrame()
+        self._placeholder.setObjectName("panel")
+        ph = QVBoxLayout(self._placeholder)
+        msg = QLabel(f"{panel.title}\nvergrößert")
+        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        msg.setObjectName("subtitleLabel")
+        ph.addWidget(msg)
+        parent.replaceWidget(idx, self._placeholder)
+
+        self._expanded_panel = panel
+        panel.fs_btn.setVisible(False)
+        self._expand_heading.setText(panel.title)
+        self._expand_slot.addWidget(panel)
+        self._stack.setCurrentIndex(1)
+
+    def _collapse_panel(self):
+        panel = self._expanded_panel
+        if panel is None:
+            return
+        self._expand_slot.removeWidget(panel)
+        if self._home_splitter is not None and self._placeholder is not None:
+            idx = self._home_splitter.indexOf(self._placeholder)
+            if idx >= 0:
+                self._home_splitter.replaceWidget(idx, panel)
+            self._placeholder.deleteLater()
+        self._placeholder = None
+        self._home_splitter = None
+        self._expanded_panel = None
+        panel.fs_btn.setVisible(True)
+        self._stack.setCurrentIndex(0)
 
     def _build_header(self) -> QWidget:
         box = QWidget()
@@ -201,6 +281,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("X"), self, activated=lambda: self.motion.toggle_axis("x"))
         QShortcut(QKeySequence("Y"), self, activated=lambda: self.motion.toggle_axis("y"))
         QShortcut(QKeySequence("Z"), self, activated=lambda: self.motion.toggle_axis("z"))
+        QShortcut(QKeySequence("Escape"), self, activated=self._collapse_panel)
 
     def refresh_ports(self):
         current = self.port_combo.currentData()
@@ -378,6 +459,7 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Wiedergabe", message)
 
     def closeEvent(self, event):
+        self._collapse_panel()
         self._recorder.stop()
         self._playback.stop_playback()
         self._serial.stop_port()

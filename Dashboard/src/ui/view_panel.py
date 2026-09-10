@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -61,10 +61,19 @@ class SectorLegend(QLabel):
 class ViewPanel(QFrame):
     """Abgerundete Karte: Canvas oben, Zoom und optionale Legende unten im Layout."""
 
-    def __init__(self, canvas: QWidget, extra: QWidget | None = None, parent=None):
+    expand_requested = Signal()
+
+    def __init__(
+        self,
+        canvas: QWidget,
+        extra: QWidget | None = None,
+        title: str = "Ansicht",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("panel")
         self.canvas = canvas
+        self.title = title
         canvas.setMinimumSize(240, 200)
         canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -94,4 +103,11 @@ class ViewPanel(QFrame):
         self.zoom_in_btn.clicked.connect(canvas.zoom_in)
         footer.addWidget(self.zoom_out_btn)
         footer.addWidget(self.zoom_in_btn)
+
+        self.fs_btn = QPushButton("Vollbild")
+        self.fs_btn.setObjectName("primaryButton")
+        self.fs_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.fs_btn.setToolTip("Ansicht im bestehenden Fenster vergrößern")
+        self.fs_btn.clicked.connect(self.expand_requested.emit)
+        footer.addWidget(self.fs_btn)
         layout.addLayout(footer)
